@@ -15,5 +15,6 @@ export default defineConfig({
     strictPort: true,
     host: true
   },
-  base: '/simulator/' // Ajustez ceci selon le nom de votre repo GitHub
+  base: '/simulator/'
 });
+
