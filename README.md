@@ -32,7 +32,7 @@ Simulateur solaire professionnel permettant de :
 
 ## Déploiement
 
-Le site est déployé sur GitHub Pages à l'adresse : https://abienergie.github.io/simulateur-solaire/
+Le site est déployé sur GitHub Pages à l'adresse : https://abienergie.github.io/simulator/
 
 ## Version
 
