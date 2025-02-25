@@ -1,0 +1,14 @@
+[auth]
+site_url = "https://amsaayhzgpdzviksynzx.supabase.co"
+additional_redirect_urls = ["https://amsaayhzgpdzviksynzx.supabase.co/oauth/callback"]
+autoconfirm = true
+disable_signup = true
+
+[auth.email]
+enable_signup = false
+double_confirm_changes = false
+enable_confirmations = false
+
+[functions]
+[functions.enedis-auth]
+verify_jwt = false
