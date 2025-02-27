@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { ClientProvider } from './contexts/client';
 import { FinancialSettingsProvider } from './contexts/FinancialSettingsContext';
@@ -15,8 +15,19 @@ import EnedisCallback from './pages/EnedisCallback';
 import Agency from './pages/Agency';
 import Settings from './pages/Settings';
 import ProtectedRoute from './components/ProtectedRoute';
+import LoginForm from './components/LoginForm';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const handleLogin = () => {
+    setIsAuthenticated(true);
+  };
+
+  if (!isAuthenticated) {
+    return <LoginForm onLogin={handleLogin} />;
+  }
+
   return (
     <Router>
       <ClientProvider>
