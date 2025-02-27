@@ -51,6 +51,15 @@ class EnedisAPI {
       formData.append('code', code);
       formData.append('redirect_uri', this.config.redirectUri);
 
+      console.log('Envoi de la requête token avec les paramètres:', {
+        grant_type: 'authorization_code',
+        client_id: this.config.clientId,
+        client_secret: '***',
+        code: '***' + code.slice(-6),
+        redirect_uri: this.config.redirectUri
+      });
+
+      // Code pour l'appel réel à l'API Enedis
       const response = await fetch(this.config.tokenUrl, {
         method: 'POST',
         headers: {
@@ -60,9 +69,14 @@ class EnedisAPI {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        console.error('Erreur réponse token:', error);
-        throw new Error(error.error_description || 'Échec de l\'échange du token');
+        const errorText = await response.text();
+        console.error('Erreur réponse token:', errorText);
+        try {
+          const error = JSON.parse(errorText);
+          throw new Error(error.error_description || 'Échec de l\'échange du token');
+        } catch (e) {
+          throw new Error(`Échec de l'échange du token: ${response.status} ${response.statusText}`);
+        }
       }
 
       const data = await response.json();
@@ -81,6 +95,7 @@ class EnedisAPI {
       
       this.accessToken = data.access_token;
       console.log('Token Enedis stocké avec succès');
+      
     } catch (error) {
       console.error('Erreur détaillée dans handleCallback:', error);
       throw error;
@@ -94,8 +109,22 @@ class EnedisAPI {
         return false;
       }
 
-      // Vérifier simplement si le token est valide
-      return true;
+      // Vérifier si le token est valide en faisant une requête simple
+      const endDate = new Date().toISOString().split('T')[0];
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 7); // Juste une semaine pour tester
+      
+      const response = await fetch(
+        `${this.config.apiUrl}/daily_consumption?usage_point_id=${prm}&start=${startDate.toISOString().split('T')[0]}&end=${endDate}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        }
+      );
+
+      return response.ok;
     } catch (error) {
       console.error('Erreur lors du test de connexion:', error);
       return false;
@@ -122,7 +151,7 @@ class EnedisAPI {
         endDate = new Date().toISOString().split('T')[0];
       }
 
-      // Appel à l'API Enedis
+      // Code pour l'appel réel à l'API Enedis
       const response = await fetch(
         `${this.config.apiUrl}/daily_consumption?usage_point_id=${prm}&start=${startDate}&end=${endDate}`,
         {
@@ -150,6 +179,7 @@ class EnedisAPI {
 
       const data = await response.json();
       return this.formatConsumptionData(data);
+      
     } catch (error) {
       console.error('Erreur lors de la récupération des données:', error);
       throw error;
@@ -191,6 +221,7 @@ class EnedisAPI {
   }
 
   private async refreshToken(refreshToken: string): Promise<void> {
+    // Code pour l'appel réel à l'API Enedis
     const formData = new URLSearchParams();
     formData.append('grant_type', 'refresh_token');
     formData.append('client_id', this.config.clientId);

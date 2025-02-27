@@ -1,85 +1,162 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { enedisApi } from '../utils/api/enedisApi';
+import { AlertCircle, CheckCircle } from 'lucide-react';
 
 export default function EnedisCallback() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [message, setMessage] = useState('Connexion à Enedis en cours...');
 
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // Log l'URL complète pour déboguer
-        console.log('URL de callback complète:', location.search);
+        console.log('Traitement du callback Enedis...');
+        console.log('URL complète:', window.location.href);
         
+        // Extraire les paramètres de l'URL
         const params = new URLSearchParams(location.search);
-        const code = params.get('code');
-        const state = params.get('state');
-        const usagePointId = params.get('usage_point_id');
-
-        // Log tous les paramètres reçus
-        console.log('Paramètres reçus:', {
-          code: code ? '***' + code.slice(-6) : null, // On masque la majorité du code pour la sécurité
+        const hash = location.hash;
+        
+        // Vérifier si les paramètres sont dans le hash (après #)
+        let code = params.get('code');
+        let error = params.get('error');
+        let state = params.get('state');
+        let usagePointId = params.get('usage_point_id');
+        
+        // Si les paramètres sont dans le hash, les extraire
+        if (hash && hash.includes('?')) {
+          const hashParams = new URLSearchParams(hash.split('?')[1]);
+          code = code || hashParams.get('code');
+          error = error || hashParams.get('error');
+          state = state || hashParams.get('state');
+          usagePointId = usagePointId || hashParams.get('usage_point_id');
+        }
+        
+        console.log('Paramètres extraits:', { 
+          code: code ? '***' + (code.length > 6 ? code.slice(-6) : code) : null,
+          error,
           state,
           usagePointId
         });
 
-        if (!code) {
-          console.error('Code d\'autorisation manquant dans les paramètres');
-          throw new Error('Code d\'autorisation manquant');
+        // Cas d'erreur
+        if (error) {
+          console.error('Erreur reçue:', error);
+          setStatus('error');
+          setMessage(error);
+          setTimeout(() => {
+            navigate('/abie-link', { 
+              state: { error },
+              replace: true
+            });
+          }, 3000);
+          return;
         }
 
-        if (state !== 'AbieLink1') {
-          console.error('État invalide reçu:', state);
-          throw new Error('État invalide');
+        // Cas où on reçoit un code d'autorisation
+        if (code) {
+          console.log('Code d\'autorisation reçu, échange contre un token...');
+          
+          try {
+            await enedisApi.handleCallback(code);
+            
+            // Stocker le PDL s'il est fourni
+            if (usagePointId) {
+              localStorage.setItem('enedis_usage_point_id', usagePointId);
+            }
+            
+            setStatus('success');
+            setMessage('Connexion réussie, redirection...');
+            
+            setTimeout(() => {
+              navigate('/abie-link', { 
+                state: { 
+                  success: true,
+                  pdl: usagePointId,
+                  message: 'Connexion à Enedis réussie'
+                },
+                replace: true
+              });
+            }, 2000);
+          } catch (tokenError) {
+            console.error('Erreur lors de l\'échange du code:', tokenError);
+            setStatus('error');
+            setMessage(tokenError instanceof Error ? tokenError.message : 'Erreur lors de l\'échange du code');
+            
+            setTimeout(() => {
+              navigate('/abie-link', { 
+                state: { 
+                  error: tokenError instanceof Error ? tokenError.message : 'Erreur lors de l\'échange du code'
+                },
+                replace: true
+              });
+            }, 3000);
+          }
+          return;
         }
 
-        // Store the usage point ID
-        if (usagePointId) {
-          console.log('Sauvegarde du PDL:', usagePointId);
-          localStorage.setItem('enedis_usage_point_id', usagePointId);
-        }
-
-        console.log('Échange du code contre un token...');
-        await enedisApi.handleCallback(code);
-        console.log('Échange du code réussi');
-        
-        // Redirect back to Abie Link with success
-        console.log('Redirection vers Abie Link avec succès');
-        navigate('/abie-link', { 
-          state: { 
-            success: true,
-            pdl: usagePointId,
-            message: 'Connexion à Enedis réussie'
-          },
-          replace: true
-        });
+        // Aucun paramètre utile
+        setStatus('error');
+        setMessage('Aucun paramètre d\'authentification reçu');
+        setTimeout(() => {
+          navigate('/abie-link', { 
+            state: { error: 'Aucun paramètre d\'authentification reçu' },
+            replace: true
+          });
+        }, 3000);
       } catch (error) {
         console.error('Erreur détaillée lors de la connexion Enedis:', error);
-        navigate('/abie-link', { 
-          state: { 
-            error: error instanceof Error ? error.message : 'Échec de la connexion à Enedis'
-          },
-          replace: true
-        });
+        setStatus('error');
+        setMessage(error instanceof Error ? error.message : 'Erreur inconnue');
+        
+        setTimeout(() => {
+          navigate('/abie-link', { 
+            state: { 
+              error: error instanceof Error ? error.message : 'Échec de la connexion à Enedis'
+            },
+            replace: true
+          });
+        }, 3000);
       }
     };
 
-    if (location.search) {
-      console.log('Démarrage du traitement du callback Enedis');
-      handleCallback();
-    } else {
-      console.log('Aucun paramètre dans l\'URL, redirection vers Abie Link');
-      navigate('/abie-link', { replace: true });
-    }
+    handleCallback();
   }, [navigate, location]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white p-8 rounded-lg shadow-lg text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
-        <p className="text-gray-600 mb-2">Connexion à Enedis en cours...</p>
-        <p className="text-sm text-gray-500">Veuillez patienter pendant que nous traitons votre demande</p>
+      <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md w-full">
+        {status === 'loading' && (
+          <>
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
+            <p className="text-gray-600 mb-2">{message}</p>
+            <p className="text-sm text-gray-500">Veuillez patienter pendant que nous traitons votre demande</p>
+          </>
+        )}
+        
+        {status === 'success' && (
+          <>
+            <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
+            <p className="text-gray-600 mb-2">{message}</p>
+            <p className="text-sm text-gray-500">Vous allez être redirigé automatiquement</p>
+          </>
+        )}
+        
+        {status === 'error' && (
+          <>
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <p className="text-gray-600 mb-2">Erreur de connexion</p>
+            <p className="text-sm text-red-500 mb-4">{message}</p>
+            <button
+              onClick={() => navigate('/abie-link')}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              Retour à Abie Link
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

@@ -3,7 +3,6 @@ import { Link as LinkIcon, Lock, Info, Search, ExternalLink, Zap } from 'lucide-
 import { useEnedisData } from '../hooks/useEnedisData';
 import ConsumptionChart from '../components/ConsumptionChart';
 import { useLocation } from 'react-router-dom';
-import { generateMockData } from '../utils/api/consumptionApi';
 
 const AbieLink: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -45,7 +44,7 @@ const AbieLink: React.FC = () => {
     
     try {
       // Générer l'URL d'authentification Enedis
-      const authUrl = 'https://mon-compte-particulier.enedis.fr/dataconnect/v1/oauth2/authorize?client_id=Y_LuB7HsQW3JWYudw7HRmN28FN8a&duration=P1Y&response_type=code&state=AbieLink1&redirect_uri=https://abienergie.github.io/Simulator/#/oauth/callback';
+      const authUrl = 'https://mon-compte-particulier.enedis.fr/dataconnect/v1/oauth2/authorize?client_id=Y_LuB7HsQW3JWYudw7HRmN28FN8a&duration=P1Y&response_type=code&state=AbieLink1&redirect_uri=https://abienergie.github.io/Simulator/%23/oauth/callback';
       
       // Ouvrir dans un nouvel onglet
       window.open(authUrl, '_blank');
@@ -69,9 +68,10 @@ const AbieLink: React.FC = () => {
     setError(null);
     
     try {
-      // Pour le moment, utilisons des données de test
-      const mockData = generateMockData(pdl, 365);
-      localStorage.setItem('enedis_consumption_data', JSON.stringify(mockData));
+      const endDate = new Date().toISOString().split('T')[0];
+      const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0];
       
       await fetchConsumptionData(pdl);
       setSuccess('Données récupérées avec succès');
