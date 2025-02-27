@@ -1,16 +1,92 @@
-import React, { useState } from 'react';
-import { Link as LinkIcon, Lock, Info, Search } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link as LinkIcon, Lock, Info, Search, ExternalLink, Zap } from 'lucide-react';
 import { useEnedisData } from '../hooks/useEnedisData';
 import ConsumptionChart from '../components/ConsumptionChart';
-import { enedisApi } from '../utils/api/enedisApi';
+import { useLocation } from 'react-router-dom';
+import { generateMockData } from '../utils/api/consumptionApi';
 
 const AbieLink: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const { consumptionData, resetData } = useEnedisData();
+  const [pdl, setPdl] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const location = useLocation();
+  const { consumptionData, isConnected, fetchConsumptionData, resetData, testConnection } = useEnedisData();
+
+  useEffect(() => {
+    // Récupérer le PDL du localStorage s'il existe
+    const savedPdl = localStorage.getItem('enedis_usage_point_id');
+    if (savedPdl) {
+      setPdl(savedPdl);
+      testConnection(savedPdl).then(connected => {
+        if (connected) {
+          setSuccess('Votre compteur Linky est connecté');
+        }
+      });
+    }
+
+    // Vérifier les paramètres d'URL pour les messages de succès/erreur
+    if (location.state) {
+      if (location.state.success) {
+        setSuccess(location.state.message || 'Connexion réussie');
+        if (location.state.pdl) {
+          setPdl(location.state.pdl);
+          localStorage.setItem('enedis_usage_point_id', location.state.pdl);
+        }
+      } else if (location.state.error) {
+        setError(location.state.error);
+      }
+    }
+  }, [location, testConnection]);
 
   const handleEnedisClick = () => {
-    // Ouvrir dans un nouvel onglet
-    window.open('https://mon-compte-particulier.enedis.fr/dataconnect/v1/oauth2/authorize?client_id=Y_LuB7HsQW3JWYudw7HRmN28FN8a&duration=P1Y&response_type=code&state=AbieLink1', '_blank');
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Générer l'URL d'authentification Enedis
+      const authUrl = 'https://mon-compte-particulier.enedis.fr/dataconnect/v1/oauth2/authorize?client_id=Y_LuB7HsQW3JWYudw7HRmN28FN8a&duration=P1Y&response_type=code&state=AbieLink1&redirect_uri=https://abienergie.github.io/Simulator/#/oauth/callback';
+      
+      // Ouvrir dans un nouvel onglet
+      window.open(authUrl, '_blank');
+      
+      setSuccess('Redirection vers Enedis en cours...');
+    } catch (err) {
+      setError('Erreur lors de la connexion à Enedis');
+      console.error('Erreur:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFetchData = async () => {
+    if (!pdl) {
+      setError('Veuillez entrer un numéro PDL valide');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      // Pour le moment, utilisons des données de test
+      const mockData = generateMockData(pdl, 365);
+      localStorage.setItem('enedis_consumption_data', JSON.stringify(mockData));
+      
+      await fetchConsumptionData(pdl);
+      setSuccess('Données récupérées avec succès');
+    } catch (err) {
+      setError('Erreur lors de la récupération des données');
+      console.error('Erreur:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePdlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Accepter uniquement les chiffres et limiter à 14 caractères
+    const value = e.target.value.replace(/\D/g, '').slice(0, 14);
+    setPdl(value);
   };
 
   return (
@@ -25,6 +101,18 @@ const AbieLink: React.FC = () => {
           et optimiser votre installation solaire.
         </p>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <p className="text-red-700">{error}</p>
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+          <p className="text-green-700">{success}</p>
+        </div>
+      )}
 
       {consumptionData ? (
         <ConsumptionChart data={consumptionData} onReset={resetData} />
@@ -62,40 +150,60 @@ const AbieLink: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex flex-col items-center gap-6 mt-8">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 max-w-2xl w-full text-center">
-              <h3 className="text-lg font-medium text-blue-900 mb-4">
-                Nouvelle version bientôt disponible !
-              </h3>
-              <p className="text-blue-800 mb-4">
-                Une nouvelle version d'Abie Link est en cours de développement. En attendant, vous pouvez continuer à utiliser l'ancienne version.
-              </p>
-              <a 
-                href="https://fabulous-praline-ae9982.netlify.app"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-              >
-                <LinkIcon className="h-5 w-5" />
-                Accéder à l'ancienne version
-              </a>
-            </div>
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">
+              Connecter mon compteur Linky
+            </h2>
 
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-6 max-w-2xl w-full text-center">
-              <h3 className="text-lg font-medium text-amber-900 mb-4">
-                Nouvelle version
-              </h3>
-              <p className="text-amber-800 mb-4">
-                La nouvelle version d'Abie Link sera bientôt disponible avec de nouvelles fonctionnalités.
-              </p>
-              <button
-                onClick={handleEnedisClick}
-                disabled
-                className="inline-flex items-center gap-2 px-6 py-3 bg-gray-400 text-white rounded-lg cursor-not-allowed"
-              >
-                <Lock className="h-5 w-5" />
-                Bientôt disponible
-              </button>
+            <div className="space-y-6">
+              <div>
+                <label htmlFor="pdl" className="block text-sm font-medium text-gray-700 mb-1">
+                  Numéro PDL (Point De Livraison)
+                </label>
+                <div className="mt-1 relative rounded-md shadow-sm">
+                  <input
+                    type="text"
+                    id="pdl"
+                    value={pdl}
+                    onChange={handlePdlChange}
+                    className="block w-full pr-10 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 rounded-md"
+                    placeholder="14 chiffres"
+                    maxLength={14}
+                  />
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                    <Zap className="h-5 w-5 text-gray-400" />
+                  </div>
+                </div>
+                <p className="mt-1 text-sm text-gray-500">
+                  Vous trouverez ce numéro sur votre facture d'électricité ou sur votre compteur Linky
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4">
+                <button
+                  onClick={handleEnedisClick}
+                  disabled={isLoading}
+                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                >
+                  <ExternalLink className="h-5 w-5 mr-2" />
+                  Se connecter à Enedis
+                </button>
+
+                <button
+                  onClick={handleFetchData}
+                  disabled={isLoading || !pdl}
+                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                >
+                  <Search className="h-5 w-5 mr-2" />
+                  Récupérer mes données
+                </button>
+              </div>
+
+              {isLoading && (
+                <div className="flex justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                </div>
+              )}
             </div>
           </div>
         </div>

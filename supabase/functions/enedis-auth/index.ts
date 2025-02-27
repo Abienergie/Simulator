@@ -1,9 +1,9 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
 const ENEDIS_CONFIG = {
-  clientId: Deno.env.get('ENEDIS_CLIENT_ID'),
-  clientSecret: Deno.env.get('ENEDIS_CLIENT_SECRET'),
-  redirectUri: Deno.env.get('ENEDIS_REDIRECT_URI'),
+  clientId: 'Y_LuB7HsQW3JWYudw7HRmN28FN8a',
+  clientSecret: 'Pb9H1p8zJ4IfX0xca5c7lficGo4a',
+  redirectUri: 'https://abienergie.github.io/Simulator/#/oauth/callback',
   tokenUrl: 'https://gw.hml.api.enedis.fr/oauth2/v3/token'
 }
 
@@ -79,7 +79,7 @@ serve(async (req) => {
     console.log('Token received successfully')
 
     // Rediriger vers l'application avec les paramètres
-    const appUrl = new URL('https://amsaayhzgpdzviksynzx.supabase.co/oauth/callback')
+    const appUrl = new URL('https://abienergie.github.io/Simulator/#/oauth/callback')
     appUrl.searchParams.set('access_token', data.access_token)
     if (data.refresh_token) {
       appUrl.searchParams.set('refresh_token', data.refresh_token)
@@ -101,7 +101,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Function error:', error)
     
-    const errorUrl = new URL('https://amsaayhzgpdzviksynzx.supabase.co/oauth/callback')
+    const errorUrl = new URL('https://abienergie.github.io/Simulator/#/oauth/callback')
     errorUrl.searchParams.set('error', error.message)
     
     return new Response(null, {

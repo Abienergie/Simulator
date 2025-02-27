@@ -1,20 +1,21 @@
-import { supabase } from '../../lib/supabase';
-
 class EnedisAPI {
   private static instance: EnedisAPI;
   private accessToken: string | null = null;
   
   private readonly config = {
-    clientId: import.meta.env.VITE_ENEDIS_CLIENT_ID,
-    clientSecret: import.meta.env.VITE_ENEDIS_CLIENT_SECRET,
-    redirectUri: import.meta.env.VITE_ENEDIS_REDIRECT_URI,
+    clientId: 'Y_LuB7HsQW3JWYudw7HRmN28FN8a',
+    clientSecret: 'Pb9H1p8zJ4IfX0xca5c7lficGo4a',
+    redirectUri: 'https://abienergie.github.io/Simulator/#/oauth/callback',
     authUrl: 'https://mon-compte-particulier.enedis.fr/dataconnect/v1/oauth2/authorize',
     tokenUrl: 'https://gw.hml.api.enedis.fr/oauth2/v3/token',
     apiUrl: 'https://gw.hml.api.enedis.fr/v5/metering_data',
     scope: 'fr_be_cons_detail_load_curve'
   };
 
-  private constructor() {}
+  private constructor() {
+    // Récupérer le token du localStorage s'il existe
+    this.accessToken = localStorage.getItem('enedis_access_token');
+  }
 
   public static getInstance(): EnedisAPI {
     if (!EnedisAPI.instance) {
@@ -41,18 +42,21 @@ class EnedisAPI {
   public async handleCallback(code: string): Promise<void> {
     try {
       console.log('Échange du code contre un token...');
+      
+      // Créer un FormData pour l'échange du code
+      const formData = new URLSearchParams();
+      formData.append('grant_type', 'authorization_code');
+      formData.append('client_id', this.config.clientId);
+      formData.append('client_secret', this.config.clientSecret);
+      formData.append('code', code);
+      formData.append('redirect_uri', this.config.redirectUri);
+
       const response = await fetch(this.config.tokenUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          client_id: this.config.clientId,
-          client_secret: this.config.clientSecret,
-          code,
-          redirect_uri: this.config.redirectUri
-        })
+        body: formData.toString()
       });
 
       if (!response.ok) {
@@ -64,6 +68,7 @@ class EnedisAPI {
       const data = await response.json();
       console.log('Token reçu avec succès');
       
+      // Stocker le token dans le localStorage
       localStorage.setItem('enedis_access_token', data.access_token);
       if (data.refresh_token) {
         localStorage.setItem('enedis_refresh_token', data.refresh_token);
@@ -74,10 +79,26 @@ class EnedisAPI {
       expiresAt.setSeconds(expiresAt.getSeconds() + data.expires_in);
       localStorage.setItem('enedis_token_expires', expiresAt.toISOString());
       
+      this.accessToken = data.access_token;
       console.log('Token Enedis stocké avec succès');
     } catch (error) {
       console.error('Erreur détaillée dans handleCallback:', error);
       throw error;
+    }
+  }
+
+  public async testConnection(prm: string): Promise<boolean> {
+    try {
+      const token = await this.getValidToken();
+      if (!token) {
+        return false;
+      }
+
+      // Vérifier simplement si le token est valide
+      return true;
+    } catch (error) {
+      console.error('Erreur lors du test de connexion:', error);
+      return false;
     }
   }
 
@@ -89,6 +110,19 @@ class EnedisAPI {
       }
 
       console.log('Récupération des données de consommation...');
+      
+      // Créer une date de début et de fin si non fournies
+      if (!startDate) {
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        startDate = oneYearAgo.toISOString().split('T')[0];
+      }
+      
+      if (!endDate) {
+        endDate = new Date().toISOString().split('T')[0];
+      }
+
+      // Appel à l'API Enedis
       const response = await fetch(
         `${this.config.apiUrl}/daily_consumption?usage_point_id=${prm}&start=${startDate}&end=${endDate}`,
         {
@@ -101,6 +135,16 @@ class EnedisAPI {
 
       if (!response.ok) {
         console.error('Erreur API:', response.status, response.statusText);
+        
+        // Si le token est expiré, essayer de le rafraîchir et réessayer
+        if (response.status === 401) {
+          const refreshToken = localStorage.getItem('enedis_refresh_token');
+          if (refreshToken) {
+            await this.refreshToken(refreshToken);
+            return this.getConsumptionData(prm, startDate, endDate);
+          }
+        }
+        
         throw new Error('Échec de la récupération des données');
       }
 
@@ -113,6 +157,12 @@ class EnedisAPI {
   }
 
   private async getValidToken(): Promise<string | null> {
+    // Si on a déjà un token en mémoire, on l'utilise
+    if (this.accessToken) {
+      return this.accessToken;
+    }
+    
+    // Sinon on vérifie dans le localStorage
     const token = localStorage.getItem('enedis_access_token');
     const expiresAt = localStorage.getItem('enedis_token_expires');
     
@@ -120,6 +170,7 @@ class EnedisAPI {
       return null;
     }
 
+    // Vérifier si le token est expiré
     if (new Date(expiresAt) <= new Date()) {
       // Token expiré, essayer de le rafraîchir
       const refreshToken = localStorage.getItem('enedis_refresh_token');
@@ -135,21 +186,23 @@ class EnedisAPI {
       return null;
     }
 
+    this.accessToken = token;
     return token;
   }
 
   private async refreshToken(refreshToken: string): Promise<void> {
+    const formData = new URLSearchParams();
+    formData.append('grant_type', 'refresh_token');
+    formData.append('client_id', this.config.clientId);
+    formData.append('client_secret', this.config.clientSecret);
+    formData.append('refresh_token', refreshToken);
+
     const response = await fetch(this.config.tokenUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: this.config.clientId,
-        client_secret: this.config.clientSecret,
-        refresh_token: refreshToken
-      })
+      body: formData.toString()
     });
 
     if (!response.ok) {
@@ -158,6 +211,8 @@ class EnedisAPI {
 
     const data = await response.json();
     localStorage.setItem('enedis_access_token', data.access_token);
+    this.accessToken = data.access_token;
+    
     if (data.refresh_token) {
       localStorage.setItem('enedis_refresh_token', data.refresh_token);
     }
@@ -172,11 +227,36 @@ class EnedisAPI {
       throw new Error('Format de données invalide');
     }
 
+    // Traiter les données pour les adapter au format attendu
     const readings = data.meter_reading.interval_reading;
-    const consumption = readings.map((reading: any) => ({
-      date: reading.date,
-      peakHours: reading.value * (reading.measure_type === 'HP' ? 1 : 0),
-      offPeakHours: reading.value * (reading.measure_type === 'HC' ? 1 : 0)
+    
+    // Créer un dictionnaire pour regrouper les valeurs par date
+    const readingsByDate: Record<string, { peakHours: number, offPeakHours: number }> = {};
+    
+    readings.forEach((reading: any) => {
+      const date = reading.date;
+      const value = parseFloat(reading.value);
+      const measureType = reading.measure_type;
+      
+      if (!readingsByDate[date]) {
+        readingsByDate[date] = { peakHours: 0, offPeakHours: 0 };
+      }
+      
+      if (measureType === 'HP') {
+        readingsByDate[date].peakHours += value;
+      } else if (measureType === 'HC') {
+        readingsByDate[date].offPeakHours += value;
+      } else {
+        // Si pas de distinction HP/HC, on considère que c'est en heures pleines
+        readingsByDate[date].peakHours += value;
+      }
+    });
+    
+    // Convertir le dictionnaire en tableau
+    const consumption = Object.entries(readingsByDate).map(([date, values]) => ({
+      date,
+      peakHours: values.peakHours,
+      offPeakHours: values.offPeakHours
     }));
 
     return { consumption };
