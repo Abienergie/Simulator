@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link as LinkIcon, Lock, Info, Search, ExternalLink, AlertCircle, Download } from 'lucide-react';
+import { Link as LinkIcon, Lock, Info, Search, ExternalLink, AlertCircle, Download, Database } from 'lucide-react';
 import { useEnedisData } from '../hooks/useEnedisData';
 import ConsumptionChart from '../components/ConsumptionChart';
 import { useLocation } from 'react-router-dom';
@@ -9,6 +9,7 @@ const AbieLink: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [rawData, setRawData] = useState<string | null>(null);
+  const [rawResponse, setRawResponse] = useState<string | null>(null);
   const location = useLocation();
   const { consumptionData, isConnected, fetchConsumptionData, resetData } = useEnedisData();
 
@@ -86,6 +87,56 @@ const AbieLink: React.FC = () => {
     }
   };
 
+  const handleFetchRawResponse = async () => {
+    setIsLoading(true);
+    setError(null);
+    setRawResponse(null);
+    
+    try {
+      const pdl = localStorage.getItem('enedis_usage_point_id');
+      if (!pdl) {
+        throw new Error('Aucun PDL disponible. Veuillez d\'abord vous connecter à Enedis.');
+      }
+      
+      // Récupérer le token
+      const token = localStorage.getItem('enedis_access_token');
+      if (!token) {
+        throw new Error('Aucun token disponible. Veuillez d\'abord vous connecter à Enedis.');
+      }
+      
+      // Dates pour la requête
+      const endDate = new Date().toISOString().split('T')[0];
+      const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
+      // URL de l'API
+      const url = `https://gw.hml.api.enedis.fr/v5/metering_data/daily_consumption?usage_point_id=${pdl}&start=${startDate}&end=${endDate}`;
+      
+      console.log('Tentative de récupération des données brutes:', url);
+      
+      // Faire la requête directement
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Erreur API (${response.status}): ${errorText}`);
+      }
+      
+      const responseData = await response.json();
+      setRawResponse(JSON.stringify(responseData, null, 2));
+      setSuccess('Réponse brute récupérée avec succès');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de la récupération des données brutes');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleDownloadRawData = () => {
     if (!rawData) return;
     
@@ -154,6 +205,15 @@ const AbieLink: React.FC = () => {
             </button>
             
             <button
+              onClick={handleFetchRawResponse}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors"
+              disabled={isLoading}
+            >
+              <Database className="h-4 w-4 inline mr-2" />
+              {isLoading ? 'Chargement...' : 'Données brutes API'}
+            </button>
+            
+            <button
               onClick={resetData}
               className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
             >
@@ -175,6 +235,17 @@ const AbieLink: React.FC = () => {
               </div>
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 overflow-auto max-h-96">
                 <pre className="text-xs text-gray-800 whitespace-pre-wrap">{rawData}</pre>
+              </div>
+            </div>
+          )}
+          
+          {rawResponse && (
+            <div className="mt-6">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-lg font-medium text-gray-900">Réponse API brute</h3>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 overflow-auto max-h-96">
+                <pre className="text-xs text-gray-800 whitespace-pre-wrap">{rawResponse}</pre>
               </div>
             </div>
           )}
