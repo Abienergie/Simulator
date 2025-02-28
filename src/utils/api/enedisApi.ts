@@ -7,8 +7,8 @@ class EnedisAPI {
   private readonly config = {
     clientId: 'Y_LuB7HsQW3JWYudw7HRmN28FN8a',
     clientSecret: 'Pb9H1p8zJ4IfX0xca5c7lficGo4a',
-    // URL de redirection modifiée pour pointer vers l'environnement local
-    redirectUri: window.location.origin + '/#/oauth/callback',
+    // URL de redirection modifiée pour pointer vers l'environnement de production
+    redirectUri: 'https://abienergie.github.io/Simulator/#/oauth/callback',
     authUrl: 'https://mon-compte-particulier.enedis.fr/dataconnect/v1/oauth2/authorize',
     tokenUrl: 'https://gw.hml.api.enedis.fr/oauth2/v3/token',
     apiUrl: 'https://gw.hml.api.enedis.fr/v5/metering_data',
@@ -167,12 +167,17 @@ class EnedisAPI {
       console.log(`PDL: ${prm}, Période: ${startDate} à ${endDate}`);
 
       // Appel à l'API Enedis pour récupérer les données de consommation
+      // Utilisation de daily_consumption au lieu de consumption_load_curve
       const url = `${this.config.apiUrl}/daily_consumption?usage_point_id=${prm}&start=${startDate}&end=${endDate}`;
       console.log('URL de récupération des données:', url);
       
       console.log('Envoi de la requête avec token:', token.substring(0, 10) + '...');
       
-      const response = await fetch(url, {
+      // Utilisation d'un proxy CORS si nécessaire
+      const corsProxy = '';
+      const finalUrl = corsProxy ? `${corsProxy}${encodeURIComponent(url)}` : url;
+      
+      const response = await fetch(finalUrl, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
