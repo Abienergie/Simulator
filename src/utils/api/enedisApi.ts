@@ -3,9 +3,9 @@ class EnedisAPI {
   private accessToken: string | null = null;
   
   private readonly config = {
-    clientId: 'Y_LuB7HsQW3JWYudw7HRmN28FN8a',
+    clientId: import.meta.env.VITE_ENEDIS_CLIENT_ID || 'Y_LuB7HsQW3JWYudw7HRmN28FN8a',
     clientSecret: 'Pb9H1p8zJ4IfX0xca5c7lficGo4a',
-    redirectUri: 'https://abienergie.github.io/Simulator/#/oauth/callback',
+    redirectUri: import.meta.env.VITE_ENEDIS_REDIRECT_URI || 'https://abienergie.github.io/Simulator/#/oauth/callback',
     authUrl: 'https://mon-compte-particulier.enedis.fr/dataconnect/v1/oauth2/authorize',
     tokenUrl: 'https://gw.hml.api.enedis.fr/oauth2/v3/token',
     apiUrl: 'https://gw.hml.api.enedis.fr/v5/metering_data',
@@ -50,14 +50,6 @@ class EnedisAPI {
       formData.append('client_secret', this.config.clientSecret);
       formData.append('code', code);
       formData.append('redirect_uri', this.config.redirectUri);
-
-      console.log('Envoi de la requête token avec les paramètres:', {
-        grant_type: 'authorization_code',
-        client_id: this.config.clientId,
-        client_secret: '***',
-        code: '***' + code.slice(-6),
-        redirect_uri: this.config.redirectUri
-      });
 
       // Code pour l'appel réel à l'API Enedis
       const response = await fetch(this.config.tokenUrl, {

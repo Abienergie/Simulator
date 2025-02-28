@@ -3,6 +3,7 @@ import { Link as LinkIcon, Lock, Info, Search, ExternalLink, Zap } from 'lucide-
 import { useEnedisData } from '../hooks/useEnedisData';
 import ConsumptionChart from '../components/ConsumptionChart';
 import { useLocation } from 'react-router-dom';
+import { generateMockData } from '../utils/api/consumptionApi';
 
 const AbieLink: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -43,8 +44,11 @@ const AbieLink: React.FC = () => {
     setError(null);
     
     try {
-      // Générer l'URL d'authentification Enedis
-      const authUrl = 'https://mon-compte-particulier.enedis.fr/dataconnect/v1/oauth2/authorize?client_id=Y_LuB7HsQW3JWYudw7HRmN28FN8a&duration=P1Y&response_type=code&state=AbieLink1&redirect_uri=https://abienergie.github.io/Simulator/%23/oauth/callback';
+      // Générer l'URL d'authentification Enedis avec les variables d'environnement
+      const clientId = import.meta.env.VITE_ENEDIS_CLIENT_ID || 'Y_LuB7HsQW3JWYudw7HRmN28FN8a';
+      const redirectUri = import.meta.env.VITE_ENEDIS_REDIRECT_URI || 'https://abienergie.github.io/Simulator/#/oauth/callback';
+      
+      const authUrl = `https://mon-compte-particulier.enedis.fr/dataconnect/v1/oauth2/authorize?client_id=${clientId}&duration=P1Y&response_type=code&state=AbieLink1&redirect_uri=${encodeURIComponent(redirectUri)}`;
       
       // Ouvrir dans un nouvel onglet
       window.open(authUrl, '_blank');
@@ -73,11 +77,23 @@ const AbieLink: React.FC = () => {
         .toISOString()
         .split('T')[0];
       
+      // En production, utiliser l'API réelle
       await fetchConsumptionData(pdl);
       setSuccess('Données récupérées avec succès');
     } catch (err) {
-      setError('Erreur lors de la récupération des données');
-      console.error('Erreur:', err);
+      console.error('Erreur lors de la récupération des données:', err);
+      
+      // En cas d'erreur, générer des données de test
+      setError('Impossible de récupérer les données réelles. Utilisation de données simulées pour démonstration.');
+      
+      // Générer et sauvegarder des données de test
+      const mockData = generateMockData(pdl);
+      await saveConsumptionData(mockData);
+      
+      // Recharger la page après un court délai
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
     } finally {
       setIsLoading(false);
     }
@@ -211,5 +227,14 @@ const AbieLink: React.FC = () => {
     </div>
   );
 };
+
+// Fonction pour sauvegarder les données de consommation
+async function saveConsumptionData(data: any[]) {
+  try {
+    localStorage.setItem('enedis_consumption_data', JSON.stringify(data));
+  } catch (error) {
+    console.error('Erreur lors de la sauvegarde des données:', error);
+  }
+}
 
 export default AbieLink;

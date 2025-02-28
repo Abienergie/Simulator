@@ -18,7 +18,7 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
     setLoading(true);
     setError(null);
 
-    // Vérification des identifiants en dur pour le mode démo
+    // Vérification des identifiants en dur pour le mode production
     if (email === 'abi_energie@abie.fr' && password === 'Abie2024!') {
       setTimeout(() => {
         setLoading(false);
@@ -171,12 +171,12 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
             Rapprochez-vous d'un conseiller ABI Énergie
           </p>
           <p className="mt-2 text-sm">
-            <a href="tel:0183835150" className="font-medium text-blue-600 hover:text-blue-500">
+            <a href="tel:0183835150" className="font-medium text-blue-600 hover:text-blue-800">
               01 83 83 51 50
             </a>
           </p>
           <p className="mt-2 text-sm">
-            <a href="mailto:contact@abie.fr" className="font-medium text-blue-600 hover:text-blue-500">
+            <a href="mailto:contact@abie.fr" className="font-medium text-blue-600 hover:text-blue-800">
               contact@abie.fr
             </a>
           </p>
