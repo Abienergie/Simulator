@@ -78,6 +78,22 @@ const ConsumptionChart: React.FC<ConsumptionChartProps> = ({ data, onReset }) =>
   const peakRatio = (totalPeakHours / totalConsumption) * 100;
   const offPeakRatio = (totalOffPeakHours / totalConsumption) * 100;
 
+  // Si pas de données, afficher un message
+  if (data.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg p-6 text-center">
+        <p className="text-gray-600">Aucune donnée de consommation disponible.</p>
+        <button
+          onClick={onReset}
+          className="mt-4 inline-flex items-center gap-2 px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+        >
+          <RotateCcw className="h-4 w-4" />
+          Réinitialiser
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

@@ -1,61 +1,62 @@
 import React, { useState, useEffect } from 'react';
-import { Link as LinkIcon, Lock, Info, Search, ExternalLink, Zap } from 'lucide-react';
+import { Link as LinkIcon, Lock, Info, Search, ExternalLink, AlertCircle, Download } from 'lucide-react';
 import { useEnedisData } from '../hooks/useEnedisData';
 import ConsumptionChart from '../components/ConsumptionChart';
 import { useLocation } from 'react-router-dom';
-import { generateMockData } from '../utils/api/consumptionApi';
 
 const AbieLink: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const [pdl, setPdl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [rawData, setRawData] = useState<string | null>(null);
   const location = useLocation();
-  const { consumptionData, isConnected, fetchConsumptionData, resetData, testConnection } = useEnedisData();
+  const { consumptionData, isConnected, fetchConsumptionData, resetData } = useEnedisData();
 
   useEffect(() => {
-    // Récupérer le PDL du localStorage s'il existe
-    const savedPdl = localStorage.getItem('enedis_usage_point_id');
-    if (savedPdl) {
-      setPdl(savedPdl);
-      testConnection(savedPdl).then(connected => {
-        if (connected) {
-          setSuccess('Votre compteur Linky est connecté');
-        }
-      });
-    }
-
     // Vérifier les paramètres d'URL pour les messages de succès/erreur
     if (location.state) {
       if (location.state.success) {
         setSuccess(location.state.message || 'Connexion réussie');
+        
+        // Si on a un PDL, essayer de récupérer les données
         if (location.state.pdl) {
-          setPdl(location.state.pdl);
-          localStorage.setItem('enedis_usage_point_id', location.state.pdl);
+          console.log('PDL reçu dans les paramètres d\'URL:', location.state.pdl);
+          fetchConsumptionData(location.state.pdl).catch(err => {
+            console.error('Erreur lors de la récupération des données:', err);
+            setError(err instanceof Error ? err.message : 'Erreur lors de la récupération des données');
+          });
+        } else {
+          // Sinon, utiliser le PDL stocké dans le localStorage
+          const storedPdl = localStorage.getItem('enedis_usage_point_id');
+          if (storedPdl) {
+            console.log('Utilisation du PDL stocké:', storedPdl);
+            fetchConsumptionData(storedPdl).catch(err => {
+              console.error('Erreur lors de la récupération des données:', err);
+              setError(err instanceof Error ? err.message : 'Erreur lors de la récupération des données');
+            });
+          } else {
+            console.log('Aucun PDL disponible');
+            setError('Aucun point de livraison (PDL) disponible');
+          }
         }
       } else if (location.state.error) {
         setError(location.state.error);
       }
     }
-  }, [location, testConnection]);
+  }, [location, fetchConsumptionData]);
 
   const handleEnedisClick = () => {
     setIsLoading(true);
     setError(null);
     
     try {
-      // Générer l'URL d'authentification Enedis avec les variables d'environnement
-      const clientId = import.meta.env.VITE_ENEDIS_CLIENT_ID || 'Y_LuB7HsQW3JWYudw7HRmN28FN8a';
-      const redirectUri = import.meta.env.VITE_ENEDIS_REDIRECT_URI || 'https://abienergie.github.io/Simulator/#/oauth/callback';
-      
-      const authUrl = `https://mon-compte-particulier.enedis.fr/dataconnect/v1/oauth2/authorize?client_id=${clientId}&duration=P1Y&response_type=code&state=AbieLink1&redirect_uri=${encodeURIComponent(redirectUri)}`;
-      
-      // Ouvrir dans un nouvel onglet
+      // URL directe vers l'authentification Enedis
+      const authUrl = "https://mon-compte-particulier.enedis.fr/dataconnect/v1/oauth2/authorize?client_id=Y_LuB7HsQW3JWYudw7HRmN28FN8a&duration=P1Y&response_type=code&state=AbieLink1";
       window.open(authUrl, '_blank');
       
-      setSuccess('Redirection vers Enedis en cours...');
+      setSuccess('Redirection vers Enedis...');
     } catch (err) {
-      setError('Erreur lors de la connexion à Enedis');
+      setError('Erreur lors de la redirection');
       console.error('Erreur:', err);
     } finally {
       setIsLoading(false);
@@ -63,47 +64,55 @@ const AbieLink: React.FC = () => {
   };
 
   const handleFetchData = async () => {
-    if (!pdl) {
-      setError('Veuillez entrer un numéro PDL valide');
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
+    setRawData(null);
     
     try {
-      const endDate = new Date().toISOString().split('T')[0];
-      const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split('T')[0];
+      const pdl = localStorage.getItem('enedis_usage_point_id');
+      if (!pdl) {
+        throw new Error('Aucun PDL disponible. Veuillez d\'abord vous connecter à Enedis.');
+      }
       
-      // En production, utiliser l'API réelle
-      await fetchConsumptionData(pdl);
+      const data = await fetchConsumptionData(pdl);
+      
+      // Afficher les données brutes
+      setRawData(JSON.stringify(data, null, 2));
       setSuccess('Données récupérées avec succès');
     } catch (err) {
-      console.error('Erreur lors de la récupération des données:', err);
-      
-      // En cas d'erreur, générer des données de test
-      setError('Impossible de récupérer les données réelles. Utilisation de données simulées pour démonstration.');
-      
-      // Générer et sauvegarder des données de test
-      const mockData = generateMockData(pdl);
-      await saveConsumptionData(mockData);
-      
-      // Recharger la page après un court délai
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
+      setError(err instanceof Error ? err.message : 'Erreur lors de la récupération des données');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handlePdlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Accepter uniquement les chiffres et limiter à 14 caractères
-    const value = e.target.value.replace(/\D/g, '').slice(0, 14);
-    setPdl(value);
+  const handleDownloadRawData = () => {
+    if (!rawData) return;
+    
+    const blob = new Blob([rawData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'enedis-data.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
+
+  // Récupérer les données brutes du localStorage
+  useEffect(() => {
+    const storedRawData = localStorage.getItem('enedis_raw_response');
+    if (storedRawData) {
+      try {
+        // Vérifier si c'est un JSON valide
+        JSON.parse(storedRawData);
+        setRawData(storedRawData);
+      } catch (e) {
+        console.error('Données brutes stockées invalides:', e);
+      }
+    }
+  }, []);
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
@@ -119,7 +128,8 @@ const AbieLink: React.FC = () => {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
           <p className="text-red-700">{error}</p>
         </div>
       )}
@@ -131,7 +141,44 @@ const AbieLink: React.FC = () => {
       )}
 
       {consumptionData ? (
-        <ConsumptionChart data={consumptionData} onReset={resetData} />
+        <div className="space-y-6">
+          <ConsumptionChart data={consumptionData} onReset={resetData} />
+          
+          <div className="flex justify-center space-x-4">
+            <button
+              onClick={handleFetchData}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Chargement...' : 'Récupérer vos données'}
+            </button>
+            
+            <button
+              onClick={resetData}
+              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+            >
+              Réinitialiser
+            </button>
+          </div>
+          
+          {rawData && (
+            <div className="mt-6">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-lg font-medium text-gray-900">Données brutes</h3>
+                <button
+                  onClick={handleDownloadRawData}
+                  className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                >
+                  <Download className="h-4 w-4" />
+                  Télécharger
+                </button>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 overflow-auto max-h-96">
+                <pre className="text-xs text-gray-800 whitespace-pre-wrap">{rawData}</pre>
+              </div>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -172,69 +219,46 @@ const AbieLink: React.FC = () => {
             </h2>
 
             <div className="space-y-6">
-              <div>
-                <label htmlFor="pdl" className="block text-sm font-medium text-gray-700 mb-1">
-                  Numéro PDL (Point De Livraison)
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <input
-                    type="text"
-                    id="pdl"
-                    value={pdl}
-                    onChange={handlePdlChange}
-                    className="block w-full pr-10 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 rounded-md"
-                    placeholder="14 chiffres"
-                    maxLength={14}
-                  />
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                    <Zap className="h-5 w-5 text-gray-400" />
-                  </div>
-                </div>
-                <p className="mt-1 text-sm text-gray-500">
-                  Vous trouverez ce numéro sur votre facture d'électricité ou sur votre compteur Linky
+              <div className="space-y-4">
+                <p className="text-gray-600">
+                  Pour connecter votre compteur Linky, cliquez sur le bouton ci-dessous. Vous serez redirigé vers le site d'Enedis où vous pourrez vous authentifier et autoriser l'accès à vos données de consommation.
                 </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-4">
-                <button
-                  onClick={handleEnedisClick}
-                  disabled={isLoading}
-                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                >
-                  <ExternalLink className="h-5 w-5 mr-2" />
-                  Se connecter à Enedis
-                </button>
-
-                <button
-                  onClick={handleFetchData}
-                  disabled={isLoading || !pdl}
-                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
-                >
-                  <Search className="h-5 w-5 mr-2" />
-                  Récupérer mes données
-                </button>
+                
+                <div className="flex justify-center">
+                  <button
+                    onClick={handleEnedisClick}
+                    disabled={isLoading}
+                    className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                  >
+                    <ExternalLink className="h-5 w-5 mr-2" />
+                    Se connecter à Enedis
+                  </button>
+                </div>
               </div>
 
               {isLoading && (
-                <div className="flex justify-center">
+                <div className="flex justify-center mt-4">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
+            <h3 className="text-lg font-medium text-blue-900 mb-4">
+              Pourquoi connecter votre compteur Linky ?
+            </h3>
+            <p className="text-blue-800 mb-4">
+              En connectant votre compteur Linky, vous pourrez visualiser votre consommation d'énergie en détail et optimiser votre installation solaire en fonction de vos habitudes de consommation.
+            </p>
+            <p className="text-sm text-blue-700">
+              Vos données sont sécurisées et ne sont utilisées que pour vous fournir des recommandations personnalisées.
+            </p>
           </div>
         </div>
       )}
     </div>
   );
 };
-
-// Fonction pour sauvegarder les données de consommation
-async function saveConsumptionData(data: any[]) {
-  try {
-    localStorage.setItem('enedis_consumption_data', JSON.stringify(data));
-  } catch (error) {
-    console.error('Erreur lors de la sauvegarde des données:', error);
-  }
-}
 
 export default AbieLink;

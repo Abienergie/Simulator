@@ -55,15 +55,18 @@ export default function EnedisCallback() {
           return;
         }
 
-        // Cas où on reçoit un code d'autorisation
+        // Si nous avons un code, échanger contre un token
         if (code) {
-          console.log('Code d\'autorisation reçu, échange contre un token...');
+          setMessage('Échange du code contre un token...');
           
           try {
+            // Échanger le code contre un token via l'API Enedis
             await enedisApi.handleCallback(code);
+            console.log('Échange du code réussi');
             
-            // Stocker le PDL s'il est fourni
+            // Si nous avons un PDL, le sauvegarder
             if (usagePointId) {
+              console.log('Sauvegarde du PDL:', usagePointId);
               localStorage.setItem('enedis_usage_point_id', usagePointId);
             }
             
@@ -80,15 +83,15 @@ export default function EnedisCallback() {
                 replace: true
               });
             }, 2000);
-          } catch (tokenError) {
-            console.error('Erreur lors de l\'échange du code:', tokenError);
+          } catch (error) {
+            console.error('Erreur lors de l\'échange du code:', error);
             setStatus('error');
-            setMessage(tokenError instanceof Error ? tokenError.message : 'Erreur lors de l\'échange du code');
+            setMessage(error instanceof Error ? error.message : 'Erreur lors de l\'échange du code');
             
             setTimeout(() => {
               navigate('/abie-link', { 
                 state: { 
-                  error: tokenError instanceof Error ? tokenError.message : 'Erreur lors de l\'échange du code'
+                  error: error instanceof Error ? error.message : 'Échec de la connexion à Enedis'
                 },
                 replace: true
               });

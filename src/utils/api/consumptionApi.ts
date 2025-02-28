@@ -4,6 +4,7 @@ const STORAGE_KEY = 'enedis_consumption_data';
 
 export async function saveConsumptionData(data: ConsumptionData[]): Promise<ConsumptionData[]> {
   try {
+    console.log(`Sauvegarde de ${data.length} jours de données de consommation`);
     const existingData = getStoredData();
     const mergedData = mergeConsumptionData(existingData, data);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedData));
@@ -16,6 +17,7 @@ export async function saveConsumptionData(data: ConsumptionData[]): Promise<Cons
 
 export async function getConsumptionData(prm: string, startDate: string, endDate: string): Promise<ConsumptionData[]> {
   try {
+    console.log(`Récupération des données pour le PDL ${prm} du ${startDate} au ${endDate}`);
     const data = getStoredData();
     return filterConsumptionData(data, prm, startDate, endDate);
   } catch (error) {
@@ -26,17 +28,32 @@ export async function getConsumptionData(prm: string, startDate: string, endDate
 
 function getStoredData(): ConsumptionData[] {
   const stored = localStorage.getItem(STORAGE_KEY);
-  return stored ? JSON.parse(stored) : [];
+  if (!stored) {
+    console.log('Aucune donnée stockée dans le localStorage');
+    return [];
+  }
+  
+  try {
+    const data = JSON.parse(stored);
+    console.log(`${data.length} jours de données trouvés dans le localStorage`);
+    return data;
+  } catch (error) {
+    console.error('Erreur lors du parsing des données stockées:', error);
+    return [];
+  }
 }
 
 function mergeConsumptionData(existing: ConsumptionData[], newData: ConsumptionData[]): ConsumptionData[] {
+  console.log(`Fusion de ${existing.length} jours existants avec ${newData.length} nouveaux jours`);
   const dataMap = new Map(existing.map(item => [`${item.prm}-${item.date}`, item]));
   
   newData.forEach(item => {
     dataMap.set(`${item.prm}-${item.date}`, item);
   });
 
-  return Array.from(dataMap.values());
+  const result = Array.from(dataMap.values());
+  console.log(`Résultat de la fusion: ${result.length} jours`);
+  return result;
 }
 
 function filterConsumptionData(
@@ -45,10 +62,11 @@ function filterConsumptionData(
   startDate: string,
   endDate: string
 ): ConsumptionData[] {
+  console.log(`Filtrage des données pour le PDL ${prm} du ${startDate} au ${endDate}`);
   const start = new Date(startDate);
   const end = new Date(endDate);
   
-  return data.filter(item => {
+  const filtered = data.filter(item => {
     const date = new Date(item.date);
     return (
       item.prm === prm &&
@@ -56,29 +74,7 @@ function filterConsumptionData(
       date <= end
     );
   }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-}
-
-// Fonction pour générer des données de test si nécessaire
-export function generateMockData(prm: string, days: number = 30): ConsumptionData[] {
-  const data: ConsumptionData[] = [];
-  const today = new Date();
   
-  for (let i = 0; i < days; i++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    const dateString = date.toISOString().split('T')[0];
-    
-    // Générer des valeurs aléatoires réalistes
-    const peakHours = Math.round((10 + Math.random() * 15) * 10) / 10; // Entre 10 et 25 kWh
-    const offPeakHours = Math.round((5 + Math.random() * 10) * 10) / 10; // Entre 5 et 15 kWh
-    
-    data.push({
-      prm,
-      date: dateString,
-      peakHours,
-      offPeakHours
-    });
-  }
-  
-  return data;
+  console.log(`${filtered.length} jours après filtrage`);
+  return filtered;
 }
